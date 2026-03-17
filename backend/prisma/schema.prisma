@@ -1,0 +1,163 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ──────────────────────────────────────────────
+
+enum Role {
+  USER
+  MODERATOR
+  ADMIN
+}
+
+enum WaterbodyType {
+  LAKE
+  RESERVOIR
+  RIVER
+}
+
+enum Visibility {
+  PUBLIC
+  ANONYMOUS
+}
+
+enum EventCategory {
+  ALGAL_BLOOM
+  FREE_FISHING_DAY
+  TOURNAMENT
+  SEASONAL_CLOSURE
+  ACCESS_RESTRICTION
+}
+
+enum ReminderChannel {
+  EMAIL
+}
+
+// ─── Models ─────────────────────────────────────────────
+
+model User {
+  id            String        @id @default(uuid())
+  email         String        @unique
+  passwordHash  String        @map("password_hash")
+  displayName   String?       @map("display_name")
+  role          Role          @default(USER)
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  // Password reset fields
+  resetToken    String?       @map("reset_token")
+  resetExpiry   DateTime?     @map("reset_expiry")
+
+  catchReports  CatchReport[]
+  reminders     Reminder[]
+  favorites     Favorite[]
+  createdEvents Event[]
+
+  @@map("users")
+}
+
+model Waterbody {
+  id           String         @id @default(uuid())
+  name         String
+  type         WaterbodyType
+  state        String
+  latitude     Float
+  longitude    Float
+  source       String?
+  createdAt    DateTime       @default(now()) @map("created_at")
+
+  catchReports CatchReport[]
+  events       Event[]
+  favorites    Favorite[]
+  weatherCache WeatherCache?
+
+  @@index([state])
+  @@index([name])
+  @@map("waterbodies")
+}
+
+model CatchReport {
+  id           String      @id @default(uuid())
+  userId       String      @map("user_id")
+  waterbodyId  String      @map("waterbody_id")
+  species      String
+  method       String
+  notes        String?
+  visibility   Visibility  @default(PUBLIC)
+  flagged      Boolean     @default(false)
+  createdAt    DateTime    @default(now()) @map("created_at")
+
+  user         User        @relation(fields: [userId], references: [id])
+  waterbody    Waterbody   @relation(fields: [waterbodyId], references: [id])
+
+  @@index([waterbodyId, createdAt])
+  @@index([userId])
+  @@map("catch_reports")
+}
+
+model Event {
+  id           String         @id @default(uuid())
+  waterbodyId  String?        @map("waterbody_id")
+  region       String?
+  category     EventCategory
+  title        String
+  description  String
+  startDate    DateTime       @map("start_date")
+  endDate      DateTime?      @map("end_date")
+  sourceUrl    String?        @map("source_url")
+  createdBy    String         @map("created_by")
+  createdAt    DateTime       @default(now()) @map("created_at")
+
+  waterbody    Waterbody?     @relation(fields: [waterbodyId], references: [id])
+  creator      User           @relation(fields: [createdBy], references: [id])
+
+  @@index([waterbodyId, startDate])
+  @@map("events")
+}
+
+model Reminder {
+  id                 String          @id @default(uuid())
+  userId             String          @map("user_id")
+  state              String
+  licenseExpiration  DateTime        @map("license_expiration") @db.Date
+  remindDaysBefore   Int             @map("remind_days_before")
+  channel            ReminderChannel @default(EMAIL)
+  enabled            Boolean         @default(true)
+  lastSentAt         DateTime?       @map("last_sent_at")
+  createdAt          DateTime        @default(now()) @map("created_at")
+
+  user               User            @relation(fields: [userId], references: [id])
+
+  @@index([enabled, licenseExpiration])
+  @@map("reminders")
+}
+
+model Favorite {
+  userId      String   @map("user_id")
+  waterbodyId String   @map("waterbody_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user        User      @relation(fields: [userId], references: [id])
+  waterbody   Waterbody @relation(fields: [waterbodyId], references: [id])
+
+  @@id([userId, waterbodyId])
+  @@map("favorites")
+}
+
+model WeatherCache {
+  id           String   @id @default(uuid())
+  waterbodyId  String   @unique @map("waterbody_id")
+  forecastData Json     @map("forecast_data")
+  alertsData   Json?    @map("alerts_data")
+  fetchedAt    DateTime @map("fetched_at")
+  expiresAt    DateTime @map("expires_at")
+
+  waterbody    Waterbody @relation(fields: [waterbodyId], references: [id])
+
+  @@map("weather_cache")
+}
