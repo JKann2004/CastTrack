@@ -1,17 +1,72 @@
-import React,{ useMemo,useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import "../style.css";
+
+function mapWeatherData(apiData) {
+  const periods = apiData?.forecast?.periods || [];
+
+  const current = periods[0] || {};
+
+  return {
+    temperature:
+      current.temperature != null
+        ? `${current.temperature}°F`
+        : "N/A",
+
+    wind: current.windSpeed || "N/A",
+
+    precipitation:
+      current.probabilityOfPrecipitation?.value != null
+        ? `${current.probabilityOfPrecipitation.value}%`
+        : "N/A",
+
+    vision: "N/A",
+
+    forecast: periods.slice(0, 5).map((p) => ({
+      day: p.name,
+      icon: mapIcon(p.shortForecast),
+      hi: p.temperature,
+      lo: (p.temperature ?? 0) - 10,
+    })),
+
+    alerts: (apiData?.alerts || []).map((a) => ({
+      title: a?.properties?.headline || "Weather Alert",
+      text: a?.properties?.description || "",
+    })),
+  };
+}
+
+function mapEvents(apiEvents) {
+  return (apiEvents || []).map((e) => ({
+    title: e.title,
+    description: e.description,
+    date: new Date(e.startDate).toLocaleDateString(),
+    category: e.category,
+  }));
+}
+
+function mapIcon(text) {
+  if (!text) return "⛅";
+  const t = text.toLowerCase();
+
+  if (t.includes("rain")) return "🌧️";
+  if (t.includes("cloud")) return "☁️";
+  if (t.includes("sun") || t.includes("clear")) return "☀️";
+  if (t.includes("storm")) return "⛈️";
+
+  return "⛅";
+}
 
 const WATERBODIES = [
   {
-    id: 1,
-    name: "Lake Tahoe",
-    region: "El Dorado County, CA",
+    id: "26dfc947-4734-4783-ad62-f6105ad1961b", // this is big bear lake's id
+    name: "Big Bear Lake",
+    region: "San Bernardino County, CA",
     type: "Lake",
     activity: "High",
     imgClass: "lake-img",
     species: ["Rainbow Trout","Kokanee Salmon","Bass"],
     reports: 42,
-    weather: { temp: "62°F",wind: "22 mph",precip: "15%",vis: "10 mi" },
+    weather: { temperature: "62°F",wind: "22 mph",precipitation: "15%",vision: "10 mi" },
     alerts: [
       {
         title: "Wind Advisory",
@@ -50,15 +105,15 @@ const WATERBODIES = [
     ],
   },
   {
-    id: 2,
-    name: "Sacramento River",
-    region: "Northern California",
+    id: "528a8a3c-df22-4496-a0b3-bdede5e01841", // Santa Ana River ID
+    name: "Santa Ana River",
+    region: "Southern California",
     type: "River",
     activity: "Medium",
     imgClass: "river-img",
     species: ["Chinook Salmon","Steelhead","Striped Bass"],
     reports: 28,
-    weather: { temp: "58°F",wind: "14 mph",precip: "10%",vis: "9 mi" },
+    weather: { temperature: "58°F",wind: "14 mph",precipitation: "10%",vision: "9 mi" },
     alerts: [],
     forecast: [
       { day: "Today",icon: "🌤️",hi: 58,lo: 44 },
@@ -86,15 +141,15 @@ const WATERBODIES = [
     ],
   },
   {
-    id: 3,
-    name: "Shasta Lake",
-    region: "Shasta County, CA",
+    id: "0c3827fb-a111-4da4-8ab5-79041f881fe4", // Diamond Valley Lake ID
+    name: "Diamond Valley Lake",
+    region: "Riverside County, CA",
     type: "Reservoir",
     activity: "High",
     imgClass: "reservoir-img",
     species: ["Bass","Trout","Catfish"],
     reports: 35,
-    weather: { temp: "64°F",wind: "9 mph",precip: "5%",vis: "10 mi" },
+    weather: { temperature: "64°F",wind: "9 mph",precipitation: "5%",vision: "10 mi" },
     alerts: [],
     forecast: [
       { day: "Today",icon: "☀️",hi: 64,lo: 49 },
@@ -124,11 +179,14 @@ const WATERBODIES = [
 ];
 
 export default function HomePage() {
-  const [searchQuery,setSearchQuery] = useState("");
-  const [activeFilter,setActiveFilter] = useState("all");
-  const [selectedWaterbody,setSelectedWaterbody] = useState(null);
-  const [activeTab,setActiveTab] = useState("weather");
-  const [favorites,setFavorites] = useState(["Lake Tahoe","Sacramento River"]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeFilter, setActiveFilter] = useState("all");
+  const [selectedWaterbody, setSelectedWaterbody] = useState(null);
+  const [activeTab, setActiveTab] = useState("weather");
+  const [favorites, setFavorites] = useState(["Lake Tahoe", "Sacramento River"]);
+
+  const [weatherData, setWeatherData] = useState(null);
+  const [events, setEvents] = useState();
 
   const filteredWaterbodies = useMemo(() => {
     return WATERBODIES.filter((w) => {
@@ -161,10 +219,37 @@ export default function HomePage() {
     );
   }
 
-  function openWaterbody(waterbody) {
+  async function openWaterbody(waterbody) {
     setSelectedWaterbody(waterbody);
     setActiveTab("weather");
+    setWeatherData(null);
+    setEvents([]);
+
+    try {
+      const [weatherRes, eventsRes] = await Promise.all([
+        fetch(`http://localhost:3000/api/weather/${waterbody.id}`),
+        fetch(`http://localhost:3000/api/events?waterbodyid=${waterbody.id}`)
+      ])
+
+      const weatherData = await weatherRes.json();
+      const eventsData = await eventsRes.json();
+
+      setWeatherData(mapWeatherData(weatherData));
+      setEvents(mapEvents(eventsData.data));
+      console.log("RAW BACKEND RESPONSE(Event):", eventsData.data);
+      console.log("RAW BACKEND RESPONSE(Weather):", weatherData.data);
+    } catch (error) {
+      console.error(error);
+      setWeatherData(null);
+      setEvents([]);
+    }
   }
+
+  const weather = weatherData;
+
+  const forecast = weatherData?.forecast || [];
+
+  const alerts = weatherData?.alerts || [];
 
   return (
     <div>
@@ -225,67 +310,36 @@ export default function HomePage() {
       <div className="main">
         <div className="layout">
           <div>
-            <h2 className="section-title">Popular fishing spots near you</h2>
+            <h2>Popular fishing spots</h2>
 
             <div className="cards-grid">
-              {filteredWaterbodies.map((w) => {
-                const isFav = favorites.includes(w.name);
-
-                return (
-                  <div key={w.id} className="wcard" onClick={() => openWaterbody(w)}>
-                    <div className={`wcard-img ${w.imgClass}`}>
-                      <div className="wcard-img-overlay">
-                        <span className="wcard-type">{w.type}</span>
-                      </div>
-                    </div>
-
-                    <div className="wcard-body">
-                      <div className="wcard-name">{w.name}</div>
-                      <div className="wcard-region">📍 {w.region}</div>
-                      <div className="wcard-stats">
-                        <div className="wstat">🐟 {w.species[0]}+</div>
-                        <div className="wstat">📝 {w.reports} reports</div>
-                      </div>
-                    </div>
-
-                    <div className="wcard-footer">
-                      <span className={`activity-pill ${w.activity.toLowerCase()}`}>
-                        {w.activity} activity
-                      </span>
-                      <button
-                        className={`fav-btn ${isFav ? "active" : ""}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleFavorite(w.name);
-                        }}
-                        type="button"
-                      >
-                        {isFav ? "★" : "☆"}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
+              {filteredWaterbodies.map((w) => (
+                <div key={w.id} onClick={() => openWaterbody(w)}>
+                  {w.name}
+                </div>
+              ))}
             </div>
 
             {selectedWaterbody && (
               <div className="detail-panel">
+
                 <div className="detail-header">
-                  <div style={{ display: "flex",justifyContent: "space-between",alignItems: "flex-start" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                     <div>
                       <h2>{selectedWaterbody.name}</h2>
                       <p>{selectedWaterbody.region}</p>
+
                       <div className="detail-badge">
                         📍 <span>{selectedWaterbody.type}</span>
                         &nbsp;·&nbsp;
                         🐟 <span>{selectedWaterbody.activity} activity</span>
                       </div>
                     </div>
+
                     <button
                       className="fav-btn"
-                      style={{ color: "white",fontSize: "1.4rem" }}
+                      style={{ color: "white", fontSize: "1.4rem" }}
                       onClick={() => toggleFavorite(selectedWaterbody.name)}
-                      type="button"
                     >
                       {favorites.includes(selectedWaterbody.name) ? "★" : "☆"}
                     </button>
@@ -293,7 +347,7 @@ export default function HomePage() {
                 </div>
 
                 <div className="detail-tabs">
-                  {["weather","events","catches","trends"].map((tab) => (
+                  {["weather", "events", "catches", "trends"].map((tab) => (
                     <div
                       key={tab}
                       className={`dtab ${activeTab === tab ? "active" : ""}`}
@@ -307,24 +361,21 @@ export default function HomePage() {
                   ))}
                 </div>
 
+                {/* WEATHER */}
                 {activeTab === "weather" && (
                   <div className="tab-content active">
-                    <div className="api-status api-mock">
-                      <div className="api-dot" style={{ background: "#854d0e" }}></div>
-                      Demo data — swap to live API next
-                    </div>
 
-                    {selectedWaterbody.alerts.length > 0 && (
+                    {alerts.length > 0 && (
                       <div className="wx-alert">
                         <span>⚠️</span>
                         <div>
-                          <strong style={{ fontSize: "13px",color: "#991b1b" }}>
-                            {selectedWaterbody.alerts[0].title}
+                          <strong style={{ fontSize: "13px", color: "#991b1b" }}>
+                            {alerts[0].title}
                           </strong>
-                          <br />
-                          <span style={{ fontSize: "12px",color: "#7f1d1d" }}>
-                            {selectedWaterbody.alerts[0].text}
-                          </span>
+                          {/* <br />
+                          <span style={{ fontSize: "12px", color: "#7f1d1d" }}>
+                            {alerts[0].text}
+                          </span> */}
                         </div>
                       </div>
                     )}
@@ -332,31 +383,35 @@ export default function HomePage() {
                     <div className="wx-grid">
                       <div className="wx-card">
                         <div className="wx-icon">🌡️</div>
-                        <div className="wx-val">{selectedWaterbody.weather.temp}</div>
+                        <div className="wx-val">{weather?.temperature}</div>
                         <div className="wx-label">Temperature</div>
                       </div>
+
                       <div className="wx-card">
                         <div className="wx-icon">💨</div>
-                        <div className="wx-val">{selectedWaterbody.weather.wind}</div>
+                        <div className="wx-val">{weather?.wind}</div>
                         <div className="wx-label">Wind</div>
                       </div>
+
                       <div className="wx-card">
                         <div className="wx-icon">🌧️</div>
-                        <div className="wx-val">{selectedWaterbody.weather.precip}</div>
+                        <div className="wx-val">{weather?.precipitation}</div>
                         <div className="wx-label">Precip chance</div>
                       </div>
+
                       <div className="wx-card">
                         <div className="wx-icon">👁️</div>
-                        <div className="wx-val">{selectedWaterbody.weather.vis}</div>
+                        <div className="wx-val">{weather?.vision}</div>
                         <div className="wx-label">Visibility</div>
                       </div>
                     </div>
 
-                    <p style={{ fontSize: "13px",fontWeight: 600,marginBottom: "8px" }}>
+                    <p style={{ fontSize: "13px", fontWeight: 600, marginBottom: "8px" }}>
                       5-day forecast
                     </p>
+
                     <div className="forecast-row">
-                      {selectedWaterbody.forecast.map((f) => (
+                      {forecast.map((f) => (
                         <div key={f.day} className="forecast-cell">
                           <div className="fc-day">{f.day}</div>
                           <div className="fc-icon">{f.icon}</div>
@@ -365,18 +420,19 @@ export default function HomePage() {
                         </div>
                       ))}
                     </div>
+
                   </div>
                 )}
-
+                
                 {activeTab === "events" && (
                   <div className="tab-content active">
                     <div className="event-list">
-                      {selectedWaterbody.events.length === 0 ? (
+                      {events.length === 0 ? (
                         <p style={{ color: "var(--text3)",fontSize: "13px" }}>
                           No current advisories or events for this waterbody.
                         </p>
                       ) : (
-                        selectedWaterbody.events.map((event,index) => (
+                        events.map((event,index) => (
                           <div key={index} className="event-item">
                             <div className="event-dot dot-info"></div>
                             <div className="event-meta">
