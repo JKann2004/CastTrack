@@ -18,7 +18,7 @@ export default function RegulationPage() {
                 const { latitude,longitude } = selectedLocation;
 
                 const res = await fetch(
-                    `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m,weather_code&timezone=auto`
+                    `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m,weather_code&temperature_unit=fahrenheit&timezone=auto`
                 );
 
                 if (!res.ok) throw new Error("Weather request failed");
@@ -72,7 +72,7 @@ export default function RegulationPage() {
                         <div className="stats-grid">
                             <div className="stat-tile">
                                 <span>Temperature</span>
-                                <strong>{weather.temperature_2m}°</strong>
+                                <strong>{weather.temperature_2m}°F</strong>
                             </div>
                             <div className="stat-tile">
                                 <span>Humidity</span>
@@ -84,7 +84,7 @@ export default function RegulationPage() {
                             </div>
                             <div className="stat-tile">
                                 <span>Precipitation</span>
-                                <strong>{weather.precipitation}</strong>
+                                <strong>{weather.precipitation}%</strong>
                             </div>
                         </div>
                     </div>

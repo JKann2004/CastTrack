@@ -1,3 +1,4 @@
+import { bcrypt } from 'bcrypt';
 import { PrismaClient, WaterbodyType } from "@prisma/client";
 
 const prisma = new PrismaClient();
@@ -70,6 +71,22 @@ async function main() {
       state: "CA",
       latitude: 34.0825,
       longitude: -117.7778,
+      source: "curated",
+    },
+    {
+      name: "Lake Tahoe",
+      type: WaterbodyType.RESERVOIR,
+      state: "CA",
+      latitude: 39.0968,
+      longitude: -120.032349,
+      source: "curated",
+    },
+    {
+      name: "Sacremento River",
+      type: WaterbodyType.RIVER,
+      state: "CA",
+      latitude: 38.5816,
+      longitude: -121.4944,
       source: "curated",
     },
   ];

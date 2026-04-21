@@ -185,14 +185,24 @@ export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
   const [selectedWaterbody, setSelectedWaterbody] = useState(null);
+  const [waterbodies, setWaterbodies] = useState(WATERBODIES);
   const [activeTab, setActiveTab] = useState("weather");
-  const [favorites, setFavorites] = useState(["Lake Tahoe", "Sacramento River"]);
+  const [favorites, setFavorites] = useState([]);
 
   const [weatherData, setWeatherData] = useState(null);
-  const [events, setEvents] = useState();
+  const [events, setEvents] = useState([]);
+
+useEffect(() => {
+  fetch("http://localhost:3000/api/waterbodies")
+    .then((res) => res.json())
+    .then((data) => {
+      setWaterbodies(Array.isArray(data) ? data : data.data || []);
+    })
+    .catch(() => setWaterbodies([]));
+}, []);
 
   const filteredWaterbodies = useMemo(() => {
-    return WATERBODIES.filter((w) => {
+    return waterbodies.filter((w) => {
       const matchesFilter =
         activeFilter === "all" ||
         (activeFilter === "ca" && w.region.includes("CA")) ||
@@ -204,7 +214,7 @@ export default function HomePage() {
         w.name.toLowerCase().includes(q) ||
         w.region.toLowerCase().includes(q) ||
         w.type.toLowerCase().includes(q) ||
-        w.species.some((s) => s.toLowerCase().includes(q));
+        (w.species || []).some((s) => s.toLowerCase().includes(q));
 
       return matchesFilter && matchesSearch;
     });
@@ -401,12 +411,6 @@ export default function HomePage() {
                         <div className="wx-val">{weather?.precipitation}</div>
                         <div className="wx-label">Precip chance</div>
                       </div>
-
-                      <div className="wx-card">
-                        <div className="wx-icon">👁️</div>
-                        <div className="wx-val">{weather?.vision}</div>
-                        <div className="wx-label">Visibility</div>
-                      </div>
                     </div>
 
                     <p style={{ fontSize: "13px", fontWeight: 600, marginBottom: "8px" }}>
@@ -529,7 +533,7 @@ export default function HomePage() {
                     </p>
                   ) : (
                     favorites.map((name) => {
-                      const wb = WATERBODIES.find((item) => item.name === name);
+                      const wb = waterbodies.find((item) => item.name === name);
                       return (
                         <div key={name} className="fav-item">
                           <div className="fav-dot"></div>
@@ -552,7 +556,7 @@ export default function HomePage() {
               <div className="sidebar-header">🌊 Quick conditions</div>
               <div className="sidebar-body">
                 <div style={{ display: "flex",flexDirection: "column",gap: "8px" }}>
-                  {WATERBODIES.slice(0,4).map((wb) => (
+                  {waterbodies.slice(0,4).map((wb) => (
                     <div
                       key={wb.id}
                       style={{
