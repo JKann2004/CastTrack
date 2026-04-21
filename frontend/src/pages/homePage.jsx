@@ -21,7 +21,10 @@ function mapWeatherData(apiData) {
 
     vision: "N/A",
 
-    forecast: periods.slice(0, 5).map((p) => ({
+    forecast: periods
+    .slice(0, 10)
+    .filter((_, index) => index % 2 === 0)
+    .map((p) => ({
       day: p.name,
       icon: mapIcon(p.shortForecast),
       hi: p.temperature,
