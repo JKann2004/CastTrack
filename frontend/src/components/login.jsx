@@ -43,6 +43,7 @@ export default function Login() {
 
             if (isLogin) {
                 localStorage.setItem("token", data.token);
+                localStorage.setItem("userRole", data.user.role);
                 setIsLoggedIn(true);
                 alert("Login successful!");
             } else {
@@ -64,6 +65,7 @@ export default function Login() {
 
     function handleLogout() {
         localStorage.removeItem("token");
+        localStorage.removeItem("userRole");
         setIsLoggedIn(false);
         alert("Logged out");
     }
@@ -140,7 +142,19 @@ export default function Login() {
                                     ? "Need an account?"
                                     : "Already have an account?"}
                             </button>
-
+                            {import.meta.env.DEV && (
+                                <button
+                                    onClick={() => {
+                                        setEmail("dev@casttrack.local");
+                                        setPassword("devpassword123");
+                                        setIsLogin(true);
+                                    }}
+                                    style={{ background: "transparent", color: "#aaa", border: "1px dashed #aaa", fontSize: "0.8rem" }}
+                                >
+                                    Fill Dev Credentials
+                                </button>
+                            )}
+       
                             <button onClick={() => setShowModal(false)}>
                                 Close
                             </button>

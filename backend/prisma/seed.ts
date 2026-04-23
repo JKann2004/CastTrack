@@ -1,4 +1,4 @@
-import { bcrypt } from 'bcrypt';
+import bcrypt from 'bcrypt';
 import { PrismaClient, WaterbodyType } from "@prisma/client";
 
 const prisma = new PrismaClient();
@@ -102,6 +102,16 @@ async function main() {
   }
 
   console.log(`Seeded ${waterbodies.length} waterbodies`);
+  await prisma.user.upsert({
+    where: { email: "dev@casttrack.local" },
+    update: {},
+    create: {
+      email: "dev@casttrack.local",
+      passwordHash: await bcrypt.hash("devpassword123", 12),
+      displayName: "Dev Admin",
+      role: "ADMIN",   // gives full access: create, update, delete
+    },
+  });
 }
 
 main()

@@ -1,6 +1,9 @@
 import React from "react";
 
 export default function EventPage() {
+    const userRole = localStorage.getItem("userRole");
+    const canManageEvents = userRole === "ADMIN" || userRole === "MODERATOR";
+    const canDeleteEvents = userRole === "ADMIN";
     const advisories = [
         {
             id: 1,
@@ -88,6 +91,9 @@ export default function EventPage() {
                 </div>
 
                 <div className="content-card">
+                    {canManageEvents && (
+                        <button onClick={() => { /* your create handler */ }}>+ Add Event</button>
+                    )}
                     <div className="card-header">
                         <h3>Upcoming Events</h3>
                         <span className="card-badge soft">Community Calendar</span>
@@ -96,6 +102,12 @@ export default function EventPage() {
                     <div className="stack-list">
                         {events.map((event) => (
                             <div key={event.id} className="list-card">
+                                {canManageEvents && (
+                                    <button onClick={() => { /* your edit handler */ }}>Edit</button>
+                                )}
+                                {canDeleteEvents && (
+                                    <button onClick={() => { /* your delete handler */ }}>Delete</button>
+                                )}
                                 <div className="list-card-top">
                                     <h4>{event.title}</h4>
                                     <span className="mini-date">{event.date}</span>
