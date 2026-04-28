@@ -94,7 +94,7 @@ async function main() {
   for (const wb of waterbodies) {
     await prisma.waterbody.upsert({
       where: {
-        id: wb.name.toLowerCase().replace(/\s+/g, "-"),
+        name_state: { name: wb.name, state: wb.state },
       },
       update: {},
       create: wb,

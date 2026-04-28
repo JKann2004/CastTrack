@@ -76,6 +76,7 @@ model Waterbody {
   favorites    Favorite[]
   weatherCache WeatherCache?
 
+  @@unique([name, state])
   @@index([state])
   @@index([name])
   @@map("waterbodies")
@@ -159,5 +160,4 @@ model WeatherCache {
 
   waterbody    Waterbody @relation(fields: [waterbodyId], references: [id])
 
-  @@map("weather_cache")
-}
+ 
