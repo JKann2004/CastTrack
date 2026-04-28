@@ -7,15 +7,17 @@ Backend API for the CastTrack Fishing Conditions Platform.
 ## Project Structure
 
 ```
-casttrack-api/
+backend/
 ├── prisma/
+│   ├── migrations/        # SQL migrations (init + name_state unique constraint)
 │   ├── schema.prisma      # Database schema (all entities)
-│   └── seed.ts            # Seed CA waterbodies
+│   ├── seed.ts            # Seed CA waterbodies + dev admin
+│   └── create-admin.ts    # CLI script to create or update an admin account
 ├── src/
 │   ├── config/            # Environment config loader
 │   ├── jobs/              # Scheduled cron jobs (license reminders)
 │   ├── lib/               # Prisma client singleton
-│   ├── middleware/         # Auth (JWT), validation (Zod), error handler
+│   ├── middleware/        # Auth (JWT), validation (Zod), error handler
 │   ├── routes/            # Express route files (one per feature)
 │   ├── schemas/           # Zod validation schemas
 │   ├── services/          # Business logic layer
@@ -33,7 +35,7 @@ casttrack-api/
 
 ### Prerequisites
 - Node.js v20+
-- PostgreSQL database (local, Docker, or Neon/Supabase free tier)
+- PostgreSQL database (Neon, Supabase, or local)
 
 ### Setup
 
@@ -45,80 +47,75 @@ casttrack-api/
 2. **Configure environment**
    ```bash
    cp .env.example .env
-   # Edit .env with your database URL and JWT secret
+   # Edit .env with real DATABASE_URL, JWT_SECRET, and SMTP credentials
    ```
 
-3. **Generate Prisma client + run migrations**
+3. **Generate Prisma client and run migrations**
    ```bash
    npx prisma generate
-   npx prisma migrate dev --name init
+   npx prisma migrate deploy
    ```
 
 4. **Seed the database**
    ```bash
-   npx ts-node prisma/seed.ts
+   npm run prisma:seed
    ```
+   Populates the 10 California waterbodies and the local dev admin
+   (`dev@casttrack.local` / `devpassword123`).
 
 5. **Start dev server**
    ```bash
    npm run dev
    ```
 
-6. **Verify it's running**
+6. **Verify**
    ```
    GET http://localhost:3000/api/health
    ```
 
+## Environment Variables
+
+| Variable | Required | Notes |
+|---|---|---|
+| `PORT` | no | Defaults to 3000 |
+| `NODE_ENV` | no | `development` or `production` |
+| `DATABASE_URL` | yes | Postgres connection string |
+| `JWT_SECRET` | yes | Long random string. Generate with `node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"` |
+| `JWT_EXPIRES_IN` | no | Defaults to `7d` |
+| `SMTP_HOST` | for email | e.g. `smtp.sendgrid.net` |
+| `SMTP_PORT` | for email | e.g. `587` |
+| `SMTP_USER` | for email | For SendGrid use the literal string `apikey` |
+| `SMTP_PASS` | for email | The actual API key from SendGrid / Resend / etc. |
+| `EMAIL_FROM` | for email | The "From" address shown to recipients |
+| `RATE_LIMIT_WINDOW_MS` | no | Defaults to 900000 (15 min) |
+| `RATE_LIMIT_MAX_REQUESTS` | no | Defaults to 100 |
+
 ## API Routes
 
-| Method | Endpoint                        | Auth     | Status      |
-|--------|---------------------------------|----------|-------------|
-| GET    | /api/health                     | None     | Working     |
-| POST   | /api/auth/register              | None     | Stub        |
-| POST   | /api/auth/login                 | None     | Stub        |
-| POST   | /api/auth/forgot-password       | None     | Stub        |
-| POST   | /api/auth/reset-password        | None     | Stub        |
-| GET    | /api/waterbodies                | Optional | Stub        |
-| GET    | /api/waterbodies/:id            | Optional | Stub        |
-| GET    | /api/catch-reports              | Optional | Stub        |
-| GET    | /api/catch-reports/trends       | None     | Stub        |
-| POST   | /api/catch-reports              | Required | Stub        |
-| PATCH  | /api/catch-reports/:id          | Required | Stub        |
-| DELETE | /api/catch-reports/:id          | Required | Stub        |
-| POST   | /api/catch-reports/:id/flag     | Required | Stub        |
-| GET    | /api/events                     | None     | Stub        |
-| POST   | /api/events                     | Admin    | Stub        |
-| PATCH  | /api/events/:id                 | Admin    | Stub        |
-| DELETE | /api/events/:id                 | Admin    | Stub        |
-| GET    | /api/favorites                  | Required | Stub        |
-| POST   | /api/favorites                  | Required | Stub        |
-| DELETE | /api/favorites/:waterbodyId     | Required | Stub        |
-| GET    | /api/reminders                  | Required | Stub        |
-| POST   | /api/reminders                  | Required | Stub        |
-| PATCH  | /api/reminders/:id              | Required | Stub        |
-| DELETE | /api/reminders/:id              | Required | Stub        |
-| GET    | /api/weather/:waterbodyId       | Optional | Stub        |
+All routes live under `/api`. Auth uses `Authorization: Bearer <jwt>`.
 
-**Stub** = Route registered, returns 501. Service logic is written and ready to wire up.
-
-## Build Plan
-
-1. ~~Setup environment / structure~~ (done)
-2. Wire up waterbody routes to service
-3. Wire up auth routes to service
-4. Wire up favorites routes to service
-5. Wire up catch reports routes to service
-6. Wire up weather routes to service
-7. Wire up events routes to service
-8. Wire up reminders routes to service + cron
-9. Testing and polishing
-
-## Useful Commands
-
-```bash
-npm run dev              # Start dev server with hot reload
-npm run build            # Compile TypeScript
-npm start                # Run compiled JS (production)
-npx prisma studio        # Open DB GUI browser
-npx prisma migrate dev   # Create/run migrations
-```
+| Method | Endpoint                        | Auth        |
+|--------|---------------------------------|-------------|
+| GET    | /api/health                     | None        |
+| POST   | /api/auth/register              | None        |
+| POST   | /api/auth/login                 | None        |
+| POST   | /api/auth/forgot-password       | None        |
+| POST   | /api/auth/reset-password        | None        |
+| GET    | /api/waterbodies                | Optional    |
+| GET    | /api/waterbodies/:id            | Optional    |
+| GET    | /api/catch-reports              | Optional    |
+| GET    | /api/catch-reports/trends       | None        |
+| POST   | /api/catch-reports              | Required    |
+| PATCH  | /api/catch-reports/:id          | Required    |
+| DELETE | /api/catch-reports/:id          | Required    |
+| POST   | /api/catch-reports/:id/flag     | Required    |
+| GET    | /api/events                     | None        |
+| POST   | /api/events                     | Admin/Mod   |
+| PATCH  | /api/events/:id                 | Admin/Mod   |
+| DELETE | /api/events/:id                 | Admin       |
+| GET    | /api/favorites                  | Required    |
+| POST   | /api/favorites                  | Required    |
+| DELETE | /api/favorites/:waterbodyId     | Required    |
+| GET    | /api/reminders                  | Required    |
+| POST   | /api/reminders                  | Required    |
+| PATCH  | /api/reminders/:id              | 
