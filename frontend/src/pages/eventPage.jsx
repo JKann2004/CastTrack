@@ -1,125 +1,355 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
+import { api } from "../lib/api";
+import { useAuth } from "../lib/auth";
+
+const ADVISORY_CATEGORIES = new Set([
+    "ALGAL_BLOOM",
+    "SEASONAL_CLOSURE",
+    "ACCESS_RESTRICTION",
+]);
+
+const CATEGORIES = [
+    "ALGAL_BLOOM",
+    "FREE_FISHING_DAY",
+    "TOURNAMENT",
+    "SEASONAL_CLOSURE",
+    "ACCESS_RESTRICTION",
+];
+
+function formatDate(dateStr) {
+    if (!dateStr) return "";
+    const d = new Date(dateStr);
+    return d.toLocaleDateString("en-US", {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+    });
+}
 
 export default function EventPage() {
-    const userRole = localStorage.getItem("userRole");
-    const canManageEvents = userRole === "ADMIN" || userRole === "MODERATOR";
-    const canDeleteEvents = userRole === "ADMIN";
-    const advisories = [
-        {
-            id: 1,
-            title: "Algae Bloom Warning",
-            severity: "High",
-            location: "Castaic Lake",
-            description:
-                "Avoid direct water contact near affected shoreline areas due to potentially harmful algae activity.",
-        },
-        {
-            id: 2,
-            title: "Strong Wind Advisory",
-            severity: "Moderate",
-            location: "Silverwood Lake",
-            description:
-                "Afternoon gusts may affect small boats and reduce shoreline fishing comfort and safety.",
-        },
-    ];
+    const { role, user } = useAuth();
+    const canManage = role === "ADMIN" || role === "MODERATOR";
+    const canDelete = role === "ADMIN";
 
-    const events = [
-        {
-            id: 1,
-            title: "California Free Fishing Day",
-            date: "June 6, 2026",
-            location: "Statewide",
-            description:
-                "Anglers may fish without a license during California's designated free fishing opportunity.",
-        },
-        {
-            id: 2,
-            title: "Weekend Bass Tournament",
-            date: "June 14, 2026",
-            location: "Lake Perris",
-            description:
-                "A local catch-and-release tournament focused on bass activity and community participation.",
-        },
-        {
-            id: 3,
-            title: "Youth Fishing Clinic",
-            date: "June 21, 2026",
-            location: "Big Bear Lake",
-            description:
-                "Beginner-focused event introducing young anglers to basic fishing skills and safety practices.",
-        },
-    ];
+    const [events, setEvents] = useState([]);
+    const [waterbodies, setWaterbodies] = useState([]);
+
+    const [showModal, setShowModal] = useState(false);
+    const [editingId, setEditingId] = useState(null);
+
+    const emptyForm = {
+        title: "",
+        description: "",
+        category: "TOURNAMENT",
+        waterbodyId: "",
+        startDate: "",
+        endDate: "",
+        sourceUrl: "",
+    };
+
+    const [form, setForm] = useState(emptyForm);
+
+    useEffect(() => {
+        loadAll();
+    }, []);
+
+    async function loadAll() {
+        const [evRes, wbRes] = await Promise.allSettled([
+            api.get("/events"),
+            api.get("/waterbodies"),
+        ]);
+
+        if (evRes.status === "fulfilled") {
+            setEvents(evRes.value?.data || []);
+        }
+
+        if (wbRes.status === "fulfilled") {
+            const list = Array.isArray(wbRes.value)
+                ? wbRes.value
+                : wbRes.value?.data || [];
+            setWaterbodies(list);
+        }
+    }
+
+    function openCreate() {
+        setEditingId(null);
+        setForm(emptyForm);
+        setShowModal(true);
+    }
+
+    function openEdit(event) {
+        setEditingId(event.id);
+        setForm({
+            title: event.title,
+            description: event.description,
+            category: event.category,
+            waterbodyId: event.waterbodyId || "",
+            startDate: event.startDate?.slice(0, 10) || "",
+            endDate: event.endDate?.slice(0, 10) || "",
+            sourceUrl: event.sourceUrl || "",
+        });
+        setShowModal(true);
+    }
+
+    async function handleSubmit(e) {
+        e.preventDefault();
+
+        try {
+            const payload = {
+                title: form.title,
+                description: form.description,
+                category: form.category,
+                startDate: new Date(form.startDate).toISOString(),
+                endDate: form.endDate ? new Date(form.endDate).toISOString() : undefined,
+                waterbodyId: form.waterbodyId || undefined,
+                sourceUrl: form.sourceUrl || undefined,
+                createdBy: user?.id
+            };
+
+            if (editingId) {
+                await api.patch(`/events/${editingId}`, payload);
+            } else {
+                await api.post("/events", payload);
+            }
+
+            setShowModal(false);
+            setForm(emptyForm);
+            setEditingId(null);
+            await loadAll();
+
+        } catch (err) {
+            console.error("CREATE/UPDATE ERROR:", err);
+            alert(err?.response?.data?.message || err.message);
+        }
+    }
+
+    async function handleDelete(id) {
+        if (!confirm("Delete this event?")) return;
+
+        try {
+            await api.delete(`/events/${id}`);
+            await loadAll();
+        } catch (err) {
+            console.error("❌ DELETE ERROR:", err.message);
+            alert(err.message);
+        }
+    }
+
+    const advisories = events.filter((e) =>
+        ADVISORY_CATEGORIES.has(e.category)
+    );
+
+    const upcoming = events.filter((e) =>
+        !ADVISORY_CATEGORIES.has(e.category)
+    );
 
     return (
         <div className="page-shell">
+
             <section className="page-hero">
                 <div>
                     <p className="eyebrow">AWARENESS CENTER</p>
                     <h1 className="page-title">Events & Advisories</h1>
-                    <p className="page-subtitle">
-                        Track upcoming fishing events alongside active safety notices and
-                        environmental alerts that may affect trip planning.
-                    </p>
                 </div>
-                <div className="status-pill warning">2 Active Advisories</div>
             </section>
 
             <section className="content-grid two-col">
+
+                {/* ADVISORIES */}
                 <div className="content-card">
-                    <div className="card-header">
-                        <h3>Active Advisories</h3>
-                        <span className="card-badge warning-badge">Priority Alerts</span>
-                    </div>
+                    <h3>Active Advisories</h3>
 
                     <div className="stack-list">
-                        {advisories.map((advisory) => (
-                            <div key={advisory.id} className="list-card advisory-card">
-                                <div className="list-card-top">
-                                    <h4>{advisory.title}</h4>
-                                    <span
-                                        className={`severity-tag ${advisory.severity === "High" ? "high" : "moderate"
-                                            }`}
-                                    >
-                                        {advisory.severity}
-                                    </span>
+                        {advisories.map((e) => (
+                            <div key={e.id} className="list-card">
+
+                                <div style={{
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    alignItems: "center"
+                                }}>
+                                    <div className="event-title">{e.title}</div>
+                                    <div className="mini-date">{formatDate(e.startDate)}</div>
                                 </div>
-                                <p className="list-meta">{advisory.location}</p>
-                                <p>{advisory.description}</p>
+
+                                {e.waterbodyId && (
+                                    <div className="list-meta" style={{ color: "#1f4f91" }}>
+                                        {waterbodies.find(w => w.id === e.waterbodyId)?.name}
+                                    </div>
+                                )}
+
+                                <div className="event-desc">{e.description}</div>
+
+                                {canManage && (
+                                    <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                                        <button onClick={() => openEdit(e)}>Edit</button>
+
+                                        {canDelete && (
+                                            <button onClick={() => handleDelete(e.id)}>
+                                                Delete
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         ))}
                     </div>
                 </div>
 
+                {/* UPCOMING */}
                 <div className="content-card">
-                    {canManageEvents && (
-                        <button onClick={() => { /* your create handler */ }}>+ Add Event</button>
-                    )}
-                    <div className="card-header">
-                        <h3>Upcoming Events</h3>
-                        <span className="card-badge soft">Community Calendar</span>
-                    </div>
+                    <h3>Upcoming Events</h3>
 
                     <div className="stack-list">
-                        {events.map((event) => (
-                            <div key={event.id} className="list-card">
-                                {canManageEvents && (
-                                    <button onClick={() => { /* your edit handler */ }}>Edit</button>
-                                )}
-                                {canDeleteEvents && (
-                                    <button onClick={() => { /* your delete handler */ }}>Delete</button>
-                                )}
-                                <div className="list-card-top">
-                                    <h4>{event.title}</h4>
-                                    <span className="mini-date">{event.date}</span>
+                        {upcoming.map((e) => (
+                            <div key={e.id} className="list-card">
+
+                                <div style={{
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    alignItems: "center"
+                                }}>
+                                    <div className="event-title">{e.title}</div>
+                                    <div className="mini-date">{formatDate(e.startDate)}</div>
                                 </div>
-                                <p className="list-meta">{event.location}</p>
-                                <p>{event.description}</p>
+
+                                {e.waterbodyId && (
+                                    <div className="list-meta" style={{ color: "#1f4f91" }}>
+                                        {waterbodies.find(w => w.id === e.waterbodyId)?.name}
+                                    </div>
+                                )}
+
+                                <div className="event-desc">{e.description}</div>
+
+                                {canManage && (
+                                    <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                                        <button onClick={() => openEdit(e)}>Edit</button>
+
+                                        {canDelete && (
+                                            <button onClick={() => handleDelete(e.id)}>
+                                                Delete
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         ))}
                     </div>
                 </div>
             </section>
 
+            {/* FAB */}
+            {canManage && (
+                <button
+                    className="fab-button"
+                    style={{ background: "#1f4f91", color: "white" }}
+                    onClick={openCreate}
+                >
+                    +
+                </button>
+            )}
+
+            {/* MODAL */}
+            {showModal && (
+                <div className="modal-backdrop" onClick={() => setShowModal(false)}>
+                    <div className="modal-card clean-modal" onClick={(e) => e.stopPropagation()}>
+
+                        <h2>{editingId ? "Edit Event" : "Create Event"}</h2>
+
+                        <form onSubmit={handleSubmit} className="modal-form">
+
+                            <div className="field">
+                                <label>Title</label>
+                                <input
+                                    value={form.title}
+                                    onChange={(e) =>
+                                        setForm({ ...form, title: e.target.value })
+                                    }
+                                    required
+                                />
+                            </div>
+
+                            <div className="field">
+                                <label>Description</label>
+                                <textarea
+                                    rows={3}
+                                    value={form.description}
+                                    onChange={(e) =>
+                                        setForm({ ...form, description: e.target.value })
+                                    }
+                                    required
+                                />
+                            </div>
+
+                            <div className="field">
+                                <label>Category</label>
+                                <select
+                                    value={form.category}
+                                    onChange={(e) =>
+                                        setForm({ ...form, category: e.target.value })
+                                    }
+                                    required
+                                >
+                                    {CATEGORIES.map((c) => (
+                                        <option key={c} value={c}>{c}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className="field">
+                                <label>Location</label>
+                                <select
+                                    value={form.waterbodyId}
+                                    onChange={(e) =>
+                                        setForm({ ...form, waterbodyId: e.target.value })
+                                    }
+                                >
+                                    <option value="">None</option>
+                                    {waterbodies.map((w) => (
+                                        <option key={w.id} value={w.id}>
+                                            {w.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className="field">
+                                <label>Start Date</label>
+                                <input
+                                    type="date"
+                                    value={form.startDate}
+                                    onChange={(e) =>
+                                        setForm({ ...form, startDate: e.target.value })
+                                    }
+                                    required
+                                />
+                            </div>
+
+                            <div className="field">
+                                <label>End Date</label>
+                                <input
+                                    type="date"
+                                    value={form.endDate}
+                                    onChange={(e) =>
+                                        setForm({ ...form, endDate: e.target.value })
+                                    }
+                                />
+                            </div>
+
+                            <div className="modal-actions">
+                                <button type="button" className="btn-secondary" onClick={() => setShowModal(false)}>
+                                    Cancel
+                                </button>
+
+                                <button type="submit" className="btn-primary" style={{ background: "#1f4f91", color: "white" }}>
+                                    {editingId ? "Update" : "Create"}
+                                </button>
+                            </div>
+
+                        </form>
+                    </div>
+                </div>
+            )}
             <section className="content-card summary-card">
                 <div className="card-header">
                     <h3>Why This Page Matters</h3>

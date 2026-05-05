@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
+import { api } from "../lib/api";
+import { setAuth, clearAuth, useAuth } from "../lib/auth";
 
 export default function Login() {
     const [showModal, setShowModal] = useState(false);
@@ -8,43 +10,19 @@ export default function Login() {
     const [password, setPassword] = useState("");
     const [displayName, setDisplayName] = useState("");
 
-    const [isLoggedIn, setIsLoggedIn] = useState(
-        !!localStorage.getItem("token")
-    );
-
-    const API_URL = "http://localhost:3000/api/auth";
-
-    useEffect(() => {
-        setIsLoggedIn(!!localStorage.getItem("token"));
-    }, []);
+    const { isLoggedIn } = useAuth();
 
     async function handleSubmit() {
         try {
-            const url = isLogin ? "/login" : "/register";
-
+            const path = isLogin ? "/auth/login" : "/auth/register";
             const body = isLogin
                 ? { email, password }
                 : { email, password, displayName };
 
-            const res = await fetch(`${API_URL}${url}`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(body)
-            });
-
-            const data = await res.json();
-
-            console.log("RESPONSE:", data);
-
-            if (!res.ok) {
-                alert(data.error || data.message || "Something went wrong");
-                return;
-            }
+            const data = await api.post(path, body);
 
             if (isLogin) {
-                localStorage.setItem("token", data.token);
-                localStorage.setItem("userRole", data.user.role);
-                setIsLoggedIn(true);
+                setAuth({ token: data.token, role: data.user.role });
                 alert("Login successful!");
             } else {
                 alert("Account created! You can now log in.");
@@ -52,27 +30,22 @@ export default function Login() {
             }
 
             setShowModal(false);
-
             setEmail("");
             setPassword("");
             setDisplayName("");
-
         } catch (err) {
             console.error(err);
-            alert("Server error");
+            alert(err.message || "Server error");
         }
     }
 
     function handleLogout() {
-        localStorage.removeItem("token");
-        localStorage.removeItem("userRole");
-        setIsLoggedIn(false);
+        clearAuth();
         alert("Logged out");
     }
 
     return (
         <>
-            {/* 🔘 MAIN BUTTON (NOW TOGGLES LOGIN OR LOGOUT) */}
             <button
                 className="right-button"
                 onClick={() => {
@@ -86,7 +59,6 @@ export default function Login() {
                 {isLoggedIn ? "Logout" : "Login / Sign up"}
             </button>
 
-            {/* 🪟 MODAL */}
             {showModal && (
                 <div
                     className="modal-overlay"
@@ -154,7 +126,7 @@ export default function Login() {
                                     Fill Dev Credentials
                                 </button>
                             )}
-       
+
                             <button onClick={() => setShowModal(false)}>
                                 Close
                             </button>
