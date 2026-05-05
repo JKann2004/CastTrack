@@ -1,33 +1,22 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import AddCatch from "../components/AddCatch";
 
 
 export default function CatchPage() {
     const [waterbodies, setWaterbodies] = useState([]);
-    const [selectedWaterbodyId, setSelectedWaterbodyId] = useState("");
     const [reports, setReports] = useState([]);
     const [trends, setTrends] = useState(null);
     const [loading, setLoading] = useState(false);
+    const loadingRef = useRef(false);
+    const trendsLoadingRef = useRef(false);
+
     const [error, setError] = useState("");
 
-    const [showModal, setShowModal] = useState(false);
-
-    const { role } = useAuth();
+    const { role, isLoggedIn } = useAuth();
     const canManage = role === "ADMIN" || role === "MODERATOR";
     const canDelete = role === "ADMIN";
-
-    const getWaterbodyName = (id) =>
-        waterbodies.find(w => w.id === id)?.name || "Unknown";
-
-    const [form, setForm] = useState({
-        species: "",
-        method: "",
-        notes: "",
-        visibility: "PUBLIC",
-    });
-
-    const { isLoggedIn } = useAuth();
 
     // Initial waterbody list
     useEffect(() => {
@@ -35,7 +24,6 @@ export default function CatchPage() {
             .then((res) => {
                 const list = Array.isArray(res) ? res : res?.data || [];
                 setWaterbodies(list);
-                if (list.length > 0) setSelectedWaterbodyId(list[0].id);
             })
             .catch((err) => {
                 console.error(err);
@@ -43,84 +31,55 @@ export default function CatchPage() {
             });
     }, []);
 
-    // Reload reports + trends whenever the waterbody changes
-    useEffect(() => {
-        if (!selectedWaterbodyId) return;
-        loadReports(selectedWaterbodyId);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedWaterbodyId]);
+    async function loadReports() {
+        if (loadingRef.current) return;
 
-    async function loadReports(id = selectedWaterbodyId) {
+        loadingRef.current = true;
         setLoading(true);
         setError("");
 
         try {
-            const [reportsRes, trendsRes] = await Promise.allSettled([
-                api.get(`/catch-reports?waterbody_id=${id}&limit=20`),
-                api.get(`/catch-reports/trends?waterbody_id=${id}`),
-            ]);
+            const reportsRes = await api.get("/catch-reports?limit=500");
+            setReports(reportsRes?.data || []);
 
-            if (reportsRes.status === "fulfilled") {
-                setReports(reportsRes.value?.data || []);
+            if (!trendsLoadingRef.current && waterbodies.length) {
+                trendsLoadingRef.current = true;
+
+                const trendsRes = await Promise.allSettled(
+                    waterbodies.map((w) =>
+                        api.get(`/catch-reports/trends?waterbody_id=${w.id}`)
+                    )
+                );
+
+                const validTrends = trendsRes
+                    .filter(r => r.status === "fulfilled")
+                    .map(r => r.value?.data);
+
+                setTrends({ raw: validTrends });
             }
 
-            if (trendsRes.status === "fulfilled") {
-                setTrends(trendsRes.value?.data || null);
-            }
+        } catch (err) {
+            console.error(err);
+            setError("Failed to load catch reports.");
         } finally {
+            loadingRef.current = false;
             setLoading(false);
         }
     }
 
-    async function handleSubmit(e) {
-        e.preventDefault();
-
-        if (!selectedWaterbodyId || !form.species.trim() || !form.method.trim()) {
-            console.log("Missing required fields", form);
-            return;
-        }
-
-        try {
-            console.log("Submitting payload:", {
-                waterbodyId: selectedWaterbodyId,
-                species: form.species.trim(),
-                method: form.method.trim(),
-                notes: form.notes?.trim() || undefined,
-                visibility: form.visibility,
-            });
-
-            const res = await api.post("/catch-reports", {
-                waterbodyId: selectedWaterbodyId,
-                species: form.species.trim(),
-                method: form.method.trim(),
-                notes: form.notes?.trim() || undefined,
-                visibility: form.visibility,
-            });
-
-            console.log("Submit success:", res);
-
-            setForm({
-                species: "",
-                method: "",
-                notes: "",
-                visibility: "PUBLIC",
-            });
-
-            setShowModal(false);
-
-            await loadReports(selectedWaterbodyId);
-        } catch (err) {
-            console.error("❌ Submit failed FULL ERROR:", err);
-            setError(err?.response?.data?.message || "Failed to submit catch.");
-        }
-    }
+    // Reload reports + trends whenever the waterbody changes
+    useEffect(() => {
+        if (waterbodies.length === 0) return;
+        loadReports();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [waterbodies]);
 
     async function handleDelete(id) {
         if (!confirm("Delete this catch report?")) return;
 
         try {
             await api.delete(`/catch-reports/${id}`);
-            await loadReports(selectedWaterbodyId);
+            setReports(prev => prev.filter(r => r.id !== id));
         } catch (err) {
             console.error("❌ DELETE ERROR:", err.message);
             alert(err.message || "Failed to delete report");
@@ -131,14 +90,18 @@ export default function CatchPage() {
         if (!confirm("Flag this report for moderator review?")) return;
         try {
             await api.post(`/catch-reports/${id}/flag`);
+
+            setReports(prev =>
+                prev.map(r =>
+                    r.id === id ? { ...r, flagged: true } : r
+                )
+            );
             alert("Report flagged.");
-            loadReports();
         } catch (err) {
             alert(err.message || "Failed to flag report");
         }
     }
 
-    const weekly = trends?.weekly ?? {};
     const { topSpecies, topLocation, topTime } = useMemo(() => {
         const speciesCount = {};
         const locationCount = {};
@@ -269,101 +232,6 @@ export default function CatchPage() {
                 </div>
             </section>
 
-            {!showModal && (
-                <button
-                    className="fab-button"
-                    style={{ background: "#1f4f91", color: "white" }}
-                    onClick={() => setShowModal(true)}
-                >
-                    +
-                </button>
-            )}
-
-            {showModal && (
-                <div className="modal-backdrop" onClick={() => setShowModal(false)}>
-                    <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-
-                        <h3>Add Catch</h3>
-
-                        <form onSubmit={handleSubmit} className="modal-form">
-                            <div className="field">
-                                <label>Waterbody</label>
-                                <select
-                                    value={selectedWaterbodyId}
-                                    onChange={(e) => setSelectedWaterbodyId(e.target.value)}
-                                >
-                                    {waterbodies.map((w) => (
-                                        <option key={w.id} value={w.id}>
-                                            {w.name}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div className="field">
-                                <label>Species</label>
-                                <input
-                                    value={form.species}
-                                    onChange={(e) =>
-                                        setForm({ ...form, species: e.target.value })
-                                    }
-                                    placeholder="e.g. Bass"
-                                    required
-                                />
-                            </div>
-
-                            <div className="field">
-                                <label>Method</label>
-                                <input
-                                    value={form.method}
-                                    onChange={(e) =>
-                                        setForm({ ...form, method: e.target.value })
-                                    }
-                                    placeholder="e.g. Spinnerbait"
-                                    required
-                                />
-                            </div>
-
-                            <div className="field">
-                                <label>Notes</label>
-                                <textarea
-                                    value={form.notes}
-                                    onChange={(e) =>
-                                        setForm({ ...form, notes: e.target.value })
-                                    }
-                                    placeholder="Optional notes..."
-                                    rows={3}
-                                />
-                            </div>
-
-                            <div className="field">
-                                <label>Visibility</label>
-                                <select
-                                    value={form.visibility}
-                                    onChange={(e) =>
-                                        setForm({ ...form, visibility: e.target.value })
-                                    }
-                                >
-                                    <option value="PUBLIC">Public</option>
-                                    <option value="PRIVATE">Private</option>
-                                </select>
-                            </div>
-
-                            <div className="modal-actions">
-                                <button type="button" onClick={() => setShowModal(false)}>
-                                    Cancel
-                                </button>
-
-                                <button type="submit">
-                                    Submit Catch
-                                </button>
-                            </div>
-
-                        </form>
-                    </div>
-                </div>
-            )}
-
             <section className="content-card summary-card">
                 <div className="card-header">
                     <h3>Product Value</h3>
@@ -376,6 +244,11 @@ export default function CatchPage() {
                     activity in nearby locations.
                 </p>
             </section>
+
+            <AddCatch
+                waterbodies={waterbodies}
+                onSuccess={() => loadReports()}
+            />
         </div>
     );
 }

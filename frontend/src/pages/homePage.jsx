@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import "../style.css";
+import LicenseReminder from "../components/LicenseReminder";
 
 // ─── Adapters ────────────────────────────────────────────────────────────────
 
@@ -507,6 +508,7 @@ export default function HomePage() {
                         )}
                     </div>
                     <div>
+            <LicenseReminder />
             <div className="sidebar-card">
               <div className="sidebar-header">⭐ Saved spots</div>
               <div className="sidebar-body">

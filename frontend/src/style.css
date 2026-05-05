@@ -1622,3 +1622,8 @@ footer,
     border-radius: 8px;
     cursor: pointer;
 }
+
+input[type="date"] {
+  position: relative !important;
+  z-index: 999999 !important;
+}

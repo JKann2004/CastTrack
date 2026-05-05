@@ -10,7 +10,7 @@ export const catchReportRouter = Router();
 // Rate limit report submissions: 5 per 15 minutes per user
 const reportLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 5,
+  max: 500,
   message: { error: "Too many reports submitted. Please try again later." },
   keyGenerator: (req) => req.user?.userId || req.ip || "anonymous",
 });
@@ -23,12 +23,15 @@ catchReportRouter.get(
     try {
       const { waterbody_id, page, limit } = req.query;
 
-      if (!waterbody_id) {
-        return res.status(400).json({ error: "waterbody_id query parameter is required" });
-      }
+      // if (!waterbody_id) {
+      //   return res.status(400).json({ error: "waterbody_id query parameter is required" });
+      // }
+
+      const waterbodyId =
+        typeof waterbody_id === "string" ? waterbody_id : undefined;
 
       const result = await catchReportService.list(
-        waterbody_id as string,
+        waterbodyId,
         page ? parseInt(page as string, 10) : 1,
         limit ? parseInt(limit as string, 10) : 20
       );
@@ -47,11 +50,14 @@ catchReportRouter.get(
     try {
       const { waterbody_id } = req.query;
 
-      if (!waterbody_id) {
-        return res.status(400).json({ error: "waterbody_id query parameter is required" });
-      }
+      // if (!waterbody_id) {
+      //   return res.status(400).json({ error: "waterbody_id query parameter is required" });
+      // }
 
-      const trends = await catchReportService.getTrends(waterbody_id as string);
+      const waterbodyId =
+        typeof waterbody_id === "string" ? waterbody_id : undefined;
+
+      const trends = await catchReportService.getTrends(waterbodyId);
       return res.json(trends);
     } catch (error) {
       next(error);

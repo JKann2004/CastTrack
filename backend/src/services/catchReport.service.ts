@@ -5,8 +5,12 @@ export class CatchReportService {
   /**
    * List catch reports for a waterbody with pagination
    */
-  async list(waterbodyId: string, page = 1, limit = 20) {
-    const where: any = { waterbodyId, flagged: false };
+  async list(waterbodyId?: string, page = 1, limit = 20) {
+    const where: any = { flagged: false };
+
+    if (waterbodyId) {
+      where.waterbodyId = waterbodyId;
+    }
 
     const [reports, total] = await Promise.all([
       prisma.catchReport.findMany({
@@ -103,7 +107,7 @@ export class CatchReportService {
   /**
    * Get trend summaries for a waterbody (7-day and 30-day)
    */
-  async getTrends(waterbodyId: string) {
+  async getTrends(waterbodyId?: string) {
     const now = new Date();
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
