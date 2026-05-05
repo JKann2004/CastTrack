@@ -69,7 +69,6 @@ export default function LicenseReminder() {
         setDaysLeft(null);
     }
 
-    // 🔒 HARD AUTH GATE (IMPORTANT)
     if (!loading && !isLoggedIn) {
         return (
             <div className="sidebar-card">

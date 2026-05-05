@@ -439,7 +439,7 @@ export default function HomePage() {
                                     </div>
                                 )}
 
-                                {/* CATCH REPORTS — now real from /api/catch-reports */}
+                                {/* CATCH REPORTS*/}
                                 {activeTab === "catches" && (
                                     <div className="tab-content active">
                                         <div className="report-list">
@@ -470,7 +470,7 @@ export default function HomePage() {
                                     </div>
                                 )}
 
-                                {/* TRENDS — now real from /api/catch-reports/trends */}
+                                {/* TRENDS */}
                                 {activeTab === "trends" && (
                                     <div className="tab-content active">
                                         <div className="trend-grid">
